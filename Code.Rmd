@@ -1,6 +1,6 @@
 ---
 title: "Lab 8"
-author: "Jonathan Lin"
+author: "Joy Lin"
 date: "3/11/2022"
 output: html_document
 ---
