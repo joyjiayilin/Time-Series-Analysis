@@ -1,0 +1,99 @@
+---
+title: "Lab 8"
+author: "Jonathan Lin"
+date: "3/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library("astsa")
+library("TSA")
+library("forecast")
+```
+
+```{r}
+data <- read.csv("C:/Users/Jonathan Lin/Downloads/HistoricalData_1649187276211.csv")
+time <- c(1:331)
+close_values <- data$Close.Last[331:1]
+plot(time, close_values, type='l')
+
+log_values <- log(close_values)
+plot(time, log_values, type='l')
+```
+
+```{r}
+#We notice an overall seasonal trend of period=5. To eliminate this, we use a lag-5 differencing. Such a differencing also removes the clear polynomial trend seen in the data. We give the plot of the differenced data and the ACF and PACF plots below:
+diff_1 <- diff(log_values,5)
+plot.ts(diff_1)
+acf2(diff_1)
+
+#Notice first that there is a single large spike in the PACF plot at lag=1, suggesting an AR(1) model. Notice too that there are 4 large spikes in the beginning of the ACF plot, suggesting an MA(4) model. This overall suggests an ARMA(1,4) model. There are also seasonal spikes seen in the PACF plot, which jump up every 5 time points. We model this with a ARMA(1,0)[5] model.
+model_1 <- sarima(log_values,p=1, d=0, q=4, P=1, D=1, Q=0, S=5)
+
+#With the same differencing, we propose a second model with a different seasonal ARMA model - namely, that of an ARMA(2,1)[5] model. We propose this because there are signs of the seasonality within the blue bands in the ACF plot, and the PACF plot's seasonal spikes occur in pairs, suggesting a seasonal AR(2) model, as opposed to a seasonal AR(1) model.  
+model_2 <- sarima(log_values, p=1, d=0, q=0, P=1, D=1, Q=1, S=5)
+```
+
+
+
+```{r}
+plot.ts(diff(diff(log_values)))
+acf2(diff(diff(log_values)))
+
+#Looking at the ACF and PACF plots of the second-order differencing, we notice that there is a massive spike in the ACF plot at lag 1, and spikes in the PACF plot at lags 1-4. Hence, we first propose an ARMA(4,2) model to describe the differenced data. This results in model 3. The spikes that occur at lags 6-9 for the PACF plot can be explained by the fact that an MA model causes exponentially decreasing spikes in the PACF plot. 
+
+model_3<-sarima(log_values, p=4, d=2, q=1)
+
+#However, notice that there is also a small (but still significant) spike at lag=4 for the ACF plot, which doesn't seem to follow an exponential decay, as we would expect from an AR model. We modify model 3 to accomodate for this by fitting an ARMA(4,4) model. This accounts for the spike in the ACF plot at lag=4.
+
+model_4<-sarima(log_values, p=4, d=2, q=4)
+```
+```{r}
+#To find AIC, BIC, and AICc, we have:
+
+#AIC
+model_1$AIC
+model_2$AIC
+model_3$AIC
+model_4$AIC
+
+#BIC
+model_1$BIC
+model_2$BIC
+model_3$BIC
+model_4$BIC
+
+#AICc
+model_1$AICc
+model_2$AICc
+model_3$AICc
+model_4$AICc
+
+#Cross Validation:
+
+sse = matrix(NA, nrow=5,ncol=4) 
+for(i in 1:5){
+  
+  train.test.split.point = 281+10*(i-1)
+  train = log_values[1:train.test.split.point]
+  test = log_values[(train.test.split.point+1):(train.test.split.point+10)]
+
+
+  
+  ## Fit
+  model1 = sarima.for(train,n.ahead=10,p=1,d=0,q=4,P=1,D=1,Q=0,S=5)
+  model2 = sarima.for(train,n.ahead=10,p=1, d=0, q=0, P=1, D=1, Q=1, S=5)
+  model3 = sarima.for(train,n.ahead=10,p=4,d=2,q=1,S=0,P=0,D=0,Q=0)
+  model4 = sarima.for(train,n.ahead=10,p=4,d=2,q=4,S=0,P=0,D=0,Q=0)
+  
+  ## Test
+  sse[i,1] = sum((test - model1$pred)^2)
+  sse[i,2] = sum((test - model2$pred)^2)
+  sse[i,3] = sum((test - model3$pred)^2)
+  sse[i,4] = sum((test - model4$pred)^2)
+}
+
+apply(sse,2,sum)/5
+
+```
+
